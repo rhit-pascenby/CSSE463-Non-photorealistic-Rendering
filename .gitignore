@@ -1,0 +1,33 @@
+# Model weights & checkpoints
+*.npy
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.model
+*.meta
+checkpoint/
+checkpoints/
+models/
+weights/
+vgg19_weight/
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+
+# Generated data
+*.zip
+*.tar
+*.tar.gz
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS junk
+.DS_Store
