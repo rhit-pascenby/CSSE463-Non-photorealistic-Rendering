@@ -1,0 +1,2 @@
+ python inference.py --checkpoint samples/DB_sample/checkpoint_epoch_100.pth --input train_photo/0.jpg --output results/cartoon_image.jpg
+ 
