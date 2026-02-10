@@ -1,0 +1,25 @@
+================================================================================
+TRAINING LOG
+================================================================================
+Start Time: 2026-02-09 12:14:59
+
+CONFIGURATION:
+--------------------------------------------------------------------------------
+image_size               : 256
+batch_size               : 4
+num_epochs               : 100
+lr_g                     : 0.0002
+lr_d                     : 0.0002
+beta1                    : 0.5
+beta2                    : 0.999
+lambda_contrastive       : 1.0
+lambda_identity          : 5.0
+lambda_saturation        : 2.0
+target_saturation        : 0.7
+temperature              : 0.07
+save_interval            : 10
+checkpoint_dir           : checkpoints_4
+sample_dir               : samples_4
+
+MODEL ARCHITECTURE:
+--------------------------------------------------------------------------------
