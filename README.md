@@ -66,8 +66,8 @@ CSSE463-Non-photorealistic-Rendering/
 
 **Alternative target styles:**
 - `TWR/` - The Wind Rises anime style
-- `Both/` - Combined dataset (DragonBall + The Wind Rises)
-
+- `DB/` - Dragon Ball style
+- 
 ### Dataset Requirements
 
 - **Supported formats**: JPG, PNG, JPEG, BMP
