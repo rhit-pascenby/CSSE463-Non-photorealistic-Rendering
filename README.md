@@ -239,7 +239,7 @@ CSSE463-Non-photorealistic-Rendering/
 **Download these folders from:**
 https://drive.google.com/drive/folders/14Mo-VA6WtvTjSsU9crXexvtMdvJoD3VA?usp=sharing
 
-Extract all 2 folders into your project root before starting the web server. This only has 24, 26, 28, 30
+Extract all 2 folders into your project root before starting the web server. This only has 24, 26, 28, 30. (Update, now it has all of the epochs)
 
 ### Starting the Web Server
 
