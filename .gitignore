@@ -1,11 +1,12 @@
 # Model weights & checkpoints
 *.npy
 *.pt
-
+*.pth
 *.ckpt
 *.h5
 *.model
 *.meta
+*.txt
 checkpoint/
 checkpoints/
 models/

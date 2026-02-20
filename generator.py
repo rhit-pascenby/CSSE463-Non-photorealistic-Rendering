@@ -118,7 +118,10 @@ class Generator(nn.Module):
         self.tanh = nn.Tanh()
     
     def forward(self, x):
-
+        # Store input size to ensure output matches
+        input_size = x.shape[2:]  # (H, W)
+        
+        # Encoder
         x = self.pad1(x)
         x = self.conv1(x)
         x = self.norm1(x)
@@ -144,13 +147,13 @@ class Generator(nn.Module):
         x = self.norm5(x)
         x = self.lrelu(x)
         
-   
+        # Bottleneck
         x = self.resblock1(x)
         x = self.resblock2(x)
         x = self.resblock3(x)
         x = self.resblock4(x)
         
-     
+        # Decoder
         x = self.pad6(x)
         x = self.conv6(x)
         x = self.norm6(x)
@@ -186,6 +189,10 @@ class Generator(nn.Module):
         
         x = self.conv12(x)
         x = self.tanh(x)
+        
+        # Ensure output size matches input size (handle any rounding errors)
+        if x.shape[2:] != input_size:
+            x = F.interpolate(x, size=input_size, mode='bilinear', align_corners=True)
         
         return x
 
@@ -311,38 +318,45 @@ def test_generator():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}\n")
 
-    # Test Generator
+    # Test Generator with multiple sizes
     print("Testing Generator...")
     generator = Generator().to(device)
     
-    batch_size = 1
-    input_tensor = torch.randn(batch_size, 3, 256, 256).to(device)
+    print(f"  Generator parameters: {sum(p.numel() for p in generator.parameters()):,}\n")
     
-    with torch.no_grad():
-        output = generator(input_tensor)
+    # Test with different input sizes
+    test_sizes = [(256, 256), (512, 512), (224, 224), (300, 400)]
     
-    print(f"  Input shape: {input_tensor.shape}")
-    print(f"  Output shape: {output.shape}")
-    print(f"  Generator parameters: {sum(p.numel() for p in generator.parameters()):,}")
+    for h, w in test_sizes:
+        batch_size = 1
+        input_tensor = torch.randn(batch_size, 3, h, w).to(device)
+        
+        with torch.no_grad():
+            output = generator(input_tensor)
+        
+        print(f"  Input shape: {input_tensor.shape} -> Output shape: {output.shape}")
+        assert output.shape == input_tensor.shape, f"Size mismatch! Input {input_tensor.shape} != Output {output.shape}"
     
-    assert output.shape == (batch_size, 3, 256, 256), f"Expected output shape (1, 3, 256, 256), got {output.shape}"
-    print("  Generator test passed!\n")
+    print("  ✓ Generator maintains input/output size for all test cases!\n")
     
     # Test Discriminator
     print("Testing Discriminator...")
     discriminator = Discriminator().to(device)
     
+    input_tensor = torch.randn(1, 3, 256, 256).to(device)
     with torch.no_grad():
         disc_output = discriminator(input_tensor)
     
     print(f"  Input shape: {input_tensor.shape}")
+    if isinstance(disc_output, tuple):
+        disc_output, _ = disc_output
     print(f"  Output shape: {disc_output.shape}")
     print(f"  Discriminator parameters: {sum(p.numel() for p in discriminator.parameters()):,}")
     
-    assert disc_output.shape == (batch_size, 1, 32, 32), f"Expected output shape (1, 1, 32, 32), got {disc_output.shape}"
-    print("Discriminator test passed!\n")
+    assert disc_output.shape == (1, 1, 32, 32), f"Expected output shape (1, 1, 32, 32), got {disc_output.shape}"
+    print("  ✓ Discriminator test passed!\n")
     
-    print("All tests passed!")
+    print("✓ All tests passed!")
 
 
 if __name__ == "__main__":

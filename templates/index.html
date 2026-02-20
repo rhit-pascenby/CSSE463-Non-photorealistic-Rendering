@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cartoon Style Transfer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎨 Cartoon Style Transfer</h1>
+            <p>Transform your photos into cartoon-style artwork using deep learning</p>
+        </header>
+
+        <div class="main-content">
+            <div class="upload-section">
+                <h2>Upload Image</h2>
+                <div class="file-upload">
+                    <input type="file" id="imageInput" accept="image/*" />
+                    <label for="imageInput" class="upload-btn">
+                        <span>Choose Image</span>
+                    </label>
+                    <p class="file-name" id="fileName">No file chosen</p>
+                </div>
+
+                <div class="checkpoint-selector">
+                    <h3>Select Model Configuration</h3>
+                    
+                    <div class="selector-group">
+                        <label for="checkpointFolder">Checkpoint:</label>
+                        <select id="checkpointFolder">
+                            <option value="">-- Select Checkpoint --</option>
+                            {% for folder, files in checkpoints.items() %}
+                            <option value="{{ folder }}">{{ folder }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="selector-group">
+                        <label for="checkpointFile">Epoch:</label>
+                        <select id="checkpointFile" disabled>
+                            <option value="">-- Select Epoch --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="saturation-control">
+                    <h3>Color Adjustments</h3>
+                    <div class="slider-group">
+                        <label for="saturationSlider">
+                            Saturation: <span id="saturationValue">1.0</span>x
+                        </label>
+                        <input type="range" id="saturationSlider" min="0.5" max="2.0" step="0.1" value="1.0">
+                        <div class="slider-labels">
+                            <span>Less</span>
+                            <span>Normal</span>
+                            <span>More</span>
+                        </div>
+                    </div>
+                    <div class="slider-group">
+                        <label for="valueSlider">
+                            Brightness: <span id="valueValue">1.0</span>x
+                        </label>
+                        <input type="range" id="valueSlider" min="0.5" max="2.0" step="0.1" value="1.0">
+                        <div class="slider-labels">
+                            <span>Darker</span>
+                            <span>Normal</span>
+                            <span>Brighter</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="processBtn" class="process-btn" disabled>
+                    Generate Cartoon
+                </button>
+
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Processing your image...</p>
+                </div>
+
+                <div id="error" class="error hidden"></div>
+            </div>
+
+            <div class="results-section">
+                <div class="image-container">
+                    <div class="image-box">
+                        <h3>Original</h3>
+                        <div id="originalPreview" class="preview-box">
+                            <p class="placeholder">Upload an image to see preview</p>
+                        </div>
+                    </div>
+
+                    <div class="arrow">→</div>
+
+                    <div class="image-box">
+                        <h3>Cartoonized</h3>
+                        <div id="resultPreview" class="preview-box">
+                            <p class="placeholder">Result will appear here</p>
+                        </div>
+                        <button id="downloadBtn" class="download-btn hidden">
+                            Download Result
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>CSSE463 Non-photorealistic Rendering Project</p>
+            
+        </footer>
+    </div>
+
+    <script>
+        // Store checkpoint data
+        const checkpoints = {{ checkpoints | tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

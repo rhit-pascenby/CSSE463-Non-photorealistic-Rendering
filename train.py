@@ -8,10 +8,12 @@ import os
 from tqdm import tqdm
 import numpy as np
 from generator import Generator, Discriminator
+from generator_unet import UNetGenerator  # Import U-Net architecture
 import torch.nn.functional as F
 import argparse
 import glob
 from datetime import datetime
+from vgg19_loss import VGG19PerceptualLoss
 
 
 class ImageToImageDataset(Dataset):
@@ -101,7 +103,7 @@ def rgb_to_hsv(rgb):
 
 
 class SaturationLoss(nn.Module):
-    """Loss that encourages high saturation in generated images."""
+   
     
     def __init__(self, target_saturation=0.7):
         super(SaturationLoss, self).__init__()
@@ -152,12 +154,7 @@ class ContrastiveLoss(nn.Module):
         )
     
     def forward(self, anchor, positive, negatives=None):
-        """
-        Args:
-            anchor: Generated images (fake_anime)
-            positive: Target anime images
-            negatives: Optional negative samples (if None, uses other samples in batch)
-        """
+
         batch_size = anchor.size(0)
         
         # Extract features
@@ -187,9 +184,13 @@ class ContrastiveLoss(nn.Module):
 class GANTrainer:
    #based off research paper Gao22k, modified with contrastive loss
     
-    def __init__(self, normal_dir, anime_dir, config=None):
+    def __init__(self, normal_dir, anime_dir, config=None, use_unet=False):
         self.device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {self.device}")
+        
+        # Store architecture choice
+        self.use_unet = use_unet
+        print(f"Architecture: {'U-Net Generator' if use_unet else 'Original Generator'}")
         
         # Default configuration
         self.config = {
@@ -200,14 +201,15 @@ class GANTrainer:
             'lr_d': 0.0002,
             'beta1': 0.5,
             'beta2': 0.999,
-            'lambda_contrastive': 1.0,  # Weight for contrastive loss
-            'lambda_identity': 5.0,  # Weight for identity/content preservation
-            'lambda_saturation': 2.0,  # Weight for saturation loss (encourages vivid colors)
-            'target_saturation': 0.7,  # Target saturation level (0.7 = 70% saturation)
-            'temperature': 0.07,  # Temperature for contrastive loss
+            'lambda_vgg': 1.5,           # Weight for VGG perceptual loss (CRITICAL)
+            'lambda_contrastive': 0.5,   # Weight for contrastive loss (reduced, VGG is primary)
+            'lambda_identity': 5.0,      # Weight for identity/content preservation
+            'lambda_saturation': 2.0,    # Weight for saturation loss (encourages vivid colors)
+            'target_saturation': 0.7,    # Target saturation level (0.7 = 70% saturation)
+            'temperature': 0.07,         # Temperature for contrastive loss
             'save_interval': 10,
-            'checkpoint_dir': 'checkpoints_6',
-            'sample_dir': 'samples_6'
+            'checkpoint_dir': 'checkpoints_8',
+            'sample_dir': 'samples_8'
         }
         if config:
             self.config.update(config)
@@ -220,8 +222,11 @@ class GANTrainer:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_file = os.path.join(self.config['sample_dir'], f'training_log_{timestamp}.txt')
         
-        # Initialize models
-        self.generator = Generator().to(self.device)
+        # Initialize models - choose architecture based on use_unet flag
+        if self.use_unet:
+            self.generator = UNetGenerator().to(self.device)
+        else:
+            self.generator = Generator().to(self.device)
         self.discriminator = Discriminator().to(self.device)
         
         # Initialize weights
@@ -238,6 +243,7 @@ class GANTrainer:
         
         # Loss functions
         self.criterion_gan = nn.MSELoss()  # LSGAN loss (more stable)
+        self.criterion_vgg = VGG19PerceptualLoss().to(self.device)  # VGG19 perceptual loss
         self.criterion_contrastive = ContrastiveLoss(
             temperature=self.config['temperature'],
             feature_dim=256
@@ -294,22 +300,23 @@ class GANTrainer:
             f.write("\nLOSS FUNCTIONS:\n")
             f.write("-" * 80 + "\n")
             f.write("- GAN Loss: MSE (LSGAN)\n")
-            f.write("- Contrastive Loss: InfoNCE\n")
+            f.write("- VGG19 Perceptual Loss: L1 on conv4_4 features\n")
+            f.write("- Contrastive Loss: InfoNCE (optional)\n")
             f.write("- Identity Loss: L1\n")
             f.write("- Saturation Loss: DISABLED (commented out)\n")
             
             f.write("\n" + "=" * 80 + "\n")
             f.write("EPOCH RESULTS:\n")
             f.write("=" * 80 + "\n")
-            f.write(f"{'Epoch':>6} | {'D_loss':>8} | {'G_loss':>8} | {'GAN':>8} | {'Contrast':>8}\n")
+            f.write(f"{'Epoch':>6} | {'D_loss':>8} | {'G_loss':>8} | {'GAN':>8} | {'VGG':>8} | {'Contrast':>8}\n")
             f.write("-" * 80 + "\n")
         
         print(f"Log file created: {self.log_file}")
     
-    def log_epoch(self, epoch, avg_loss_d, avg_loss_g, avg_loss_gan, avg_loss_contrastive):
+    def log_epoch(self, epoch, avg_loss_d, avg_loss_g, avg_loss_gan, avg_loss_vgg, avg_loss_contrastive):
         """Log epoch metrics to file."""
         with open(self.log_file, 'a') as f:
-            f.write(f"{epoch+1:6d} | {avg_loss_d:8.4f} | {avg_loss_g:8.4f} | {avg_loss_gan:8.4f} | {avg_loss_contrastive:8.4f}\n")
+            f.write(f"{epoch+1:6d} | {avg_loss_d:8.4f} | {avg_loss_g:8.4f} | {avg_loss_gan:8.4f} | {avg_loss_vgg:8.4f} | {avg_loss_contrastive:8.4f}\n")
     
     def train(self, start_epoch=0):
      
@@ -317,7 +324,7 @@ class GANTrainer:
         if start_epoch > 0:
             print(f"Resuming from epoch {start_epoch}")
         print(f"Batch size: {self.config['batch_size']}")
-        print(f"Lambda Contrastive: {self.config['lambda_contrastive']}, Lambda Identity: {self.config['lambda_identity']}\n")  # , Lambda Saturation: {self.config['lambda_saturation']}
+        print(f"Lambda VGG: {self.config['lambda_vgg']}, Lambda Contrastive: {self.config['lambda_contrastive']}, Lambda Identity: {self.config['lambda_identity']}\n")  # , Lambda Saturation: {self.config['lambda_saturation']}
         
         for epoch in range(start_epoch, self.config['num_epochs']):
             self.generator.train()
@@ -325,6 +332,7 @@ class GANTrainer:
             
             epoch_loss_g = 0
             epoch_loss_d = 0
+            epoch_loss_vgg = 0
             epoch_loss_contrastive = 0
             epoch_loss_gan = 0
             # epoch_loss_saturation = 0
@@ -378,6 +386,9 @@ class GANTrainer:
                     # Optionally could add attention-based loss here
                 loss_gan = self.criterion_gan(fake_output, real_label)
                 
+                # VGG perceptual loss: preserve content structure
+                loss_vgg = self.criterion_vgg(normal_imgs, fake_anime)
+                
                 # Contrastive loss: pull generated images close to target anime style
                 # and push away from other anime images in batch
                 loss_contrastive = self.criterion_contrastive(fake_anime, anime_imgs)
@@ -390,10 +401,12 @@ class GANTrainer:
                 
                 # Total generator loss
                 # GAN loss: fool discriminator
-                # Contrastive loss: match anime style distribution
-                # Identity loss: preserve content structure (optional, can be removed)
+                # VGG loss: preserve content structure using VGG19 features 
+                # Contrastive loss: match anime style distribution 
+                # Identity loss: preserve content structure 
                 # Saturation loss: push colors to be more vibrant/saturated
                 loss_g = (loss_gan + 
+                         self.config['lambda_vgg'] * loss_vgg +
                          self.config['lambda_contrastive'] * loss_contrastive + 
                          self.config['lambda_identity'] * loss_identity)
                          # self.config['lambda_saturation'] * loss_saturation)
@@ -405,6 +418,7 @@ class GANTrainer:
                       # Update metrics
                 epoch_loss_g += loss_g.item()
                 epoch_loss_d += loss_d.item()
+                epoch_loss_vgg += loss_vgg.item()
                 epoch_loss_contrastive += loss_contrastive.item()
                 epoch_loss_gan += loss_gan.item()
                 # epoch_loss_saturation += loss_saturation.item()
@@ -413,6 +427,7 @@ class GANTrainer:
                 pbar.set_postfix({
                     'D_loss': f'{loss_d.item():.4f}',
                     'G_loss': f'{loss_g.item():.4f}',
+                    'VGG': f'{loss_vgg.item():.4f}',
                     'Contrast': f'{loss_contrastive.item():.4f}'
                     # 'Sat': f'{loss_saturation.item():.4f}'
                 })
@@ -422,15 +437,16 @@ class GANTrainer:
             avg_loss_g = epoch_loss_g / num_batches
             avg_loss_d = epoch_loss_d / num_batches
             avg_loss_gan = epoch_loss_gan / num_batches
+            avg_loss_vgg = epoch_loss_vgg / num_batches
             avg_loss_contrastive = epoch_loss_contrastive / num_batches
             # avg_loss_saturation = epoch_loss_saturation / num_batches
             
             print(f"Epoch [{epoch+1}/{self.config['num_epochs']}] "
                   f"D_loss: {avg_loss_d:.4f}, G_loss: {avg_loss_g:.4f}, "
-                  f"Contrast: {avg_loss_contrastive:.4f}")  # , Sat: {avg_loss_saturation:.4f}
+                  f"VGG: {avg_loss_vgg:.4f}, Contrast: {avg_loss_contrastive:.4f}")  
             
             # Log to file
-            self.log_epoch(epoch, avg_loss_d, avg_loss_g, avg_loss_gan, avg_loss_contrastive)
+            self.log_epoch(epoch, avg_loss_d, avg_loss_g, avg_loss_gan, avg_loss_vgg, avg_loss_contrastive)
             
             # Save samples and checkpoints
             if (epoch + 1) % self.config['save_interval'] == 0:
@@ -493,6 +509,8 @@ def main():
     parser = argparse.ArgumentParser(description='Train NPR GAN with optional checkpoint resumption')
     parser.add_argument('--checkpoint', type=str, default=None,
                        help='Checkpoint name or path to resume from (e.g., "checkpoint_epoch_50.pth" or "50" or full path)')
+    parser.add_argument('--use-unet', action='store_true',
+                       help='Use U-Net generator architecture instead of original generator')
     args = parser.parse_args()
     
     # Configuration
@@ -504,14 +522,15 @@ def main():
         'lr_d': 0.0002,
         'beta1': 0.5,
         'beta2': 0.999,
-        'lambda_contrastive': 1.0,  # Weight for contrastive loss
-        'lambda_identity': 5.0,      # Weight for identity preservation (can reduce or remove)
-        'lambda_saturation': 2.0,    # Weight for saturation loss (higher = more saturated)
-        'target_saturation': 0.7,    # Target saturation (0.7 = vivid cartoon colors)
+        'lambda_vgg': 1.5,           # Weight for VGG perceptual loss 
+        'lambda_contrastive': 0.5,   # Weight for contrastive loss 
+        'lambda_identity': 5.0,      # Weight for identity preservation 
+        'lambda_saturation': 2.0,    # Weight for saturation loss (higher = more saturated) (Not used anymore)
+        'target_saturation': 0.7,    # Target saturation (0.7 = vivid cartoon colors) (Also not used anymore)
         'temperature': 0.07,         # Temperature for contrastive loss
         'save_interval': 2,         # Save every N epochs
-        'checkpoint_dir': 'checkpoints_6',
-        'sample_dir': 'samples_6'
+        'checkpoint_dir': 'checkpoints',
+        'sample_dir': 'samples'
     }
     
     # Paths to your data
@@ -529,8 +548,8 @@ def main():
         print("Please create the directory and add your anime photos.")
         return
     
-    # Initialize trainer
-    trainer = GANTrainer(normal_dir, anime_dir, config)
+    # Initialize trainer with architecture choice
+    trainer = GANTrainer(normal_dir, anime_dir, config, use_unet=args.use_unet)
     
     # Handle checkpoint loading
     start_epoch = 0
