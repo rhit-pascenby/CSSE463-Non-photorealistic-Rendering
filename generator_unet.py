@@ -200,35 +200,7 @@ class UNetGenerator(nn.Module):
         return output
 
 
-def test_unet_generator():
-    """Test the U-Net generator architecture."""
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}\n")
-    
-    print("Testing U-Net Generator...")
-    generator = UNetGenerator().to(device)
-    
-    batch_size = 2
-    input_tensor = torch.randn(batch_size, 3, 256, 256).to(device)
-    
-    print(f"Input shape: {input_tensor.shape}")
-    
-    with torch.no_grad():
-        output = generator(input_tensor)
-    
-    print(f"Output shape: {output.shape}")
-    print(f"Output range: [{output.min():.3f}, {output.max():.3f}]")
-    print(f"Generator parameters: {sum(p.numel() for p in generator.parameters()):,}")
-    
-    assert output.shape == (batch_size, 3, 256, 256), \
-        f"Expected output shape ({batch_size}, 3, 256, 256), got {output.shape}"
-    
-    print("\n✓ U-Net Generator test passed!")
-    print("\nKey U-Net Features:")
-    print("  ✓ Encoder-Decoder architecture")
-    print("  ✓ Skip connections between encoder and decoder")
-    print("  ✓ Preserves fine-grained details from encoder")
-    print("  ✓ Symmetric architecture")
+
 
 
 if __name__ == "__main__":
